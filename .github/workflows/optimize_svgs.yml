@@ -1,0 +1,56 @@
+name: Optimize SVGs for Flutter
+
+on:
+  push:
+    branches:
+      - main # Oder dein Haupt-Branch
+    paths:
+      - 'assets/raw/**/*.svg' # Reagiert nur auf SVGs im raw-Ordner
+
+jobs:
+  optimize:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Install Inkscape and SVGO
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y inkscape
+          sudo npm install -g svgo
+
+      - name: Process SVGs (Text to Path & Optimize)
+        run: |
+          # Erstelle Zielordner falls nicht existent
+          mkdir -p assets/
+
+          # Iteriere über alle SVGs im raw-Ordner
+          for file in assets/raw/*.svg; do
+            filename=$(basename "$file")
+            echo "Processing $filename..."
+
+            # 1. Inkscape: Text zu Pfad & vereinfachen
+            # Wir nutzen --export-plain-svg um Inkscape-Tags zu entfernen
+            # und --export-text-to-path für dein Kernproblem.
+            inkscape "$file" \
+              --export-plain-svg \
+              --export-text-to-path \
+              --export-filename="assets/interim_$filename"
+
+            # 2. SVGO: Radikale Optimierung
+            # Entfernt IDs, unbenutzte Styles, Kommentare etc.
+            svgo "assets/interim_$filename" -o "assets/$filename"
+
+            # Aufräumen der Zwischenbeschreibungen
+            rm "assets/interim_$filename"
+          done
+
+      - name: Commit optimized SVGs
+        uses: stefanzweifel/git-auto-commit-action@v4
+        with:
+          commit_message: "Auto-optimized SVGs (Text to Path)"
+          file_pattern: 'assets/*.svg'
+          # Verhindert, dass die Action in eine Endlosschleife gerät
+          skip_dirty_check: false
